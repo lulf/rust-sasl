@@ -15,6 +15,7 @@
 
 use std::env;
 use std::ffi::OsString;
+use std::fs;
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 
@@ -44,6 +45,20 @@ fn main() {
     };
 }
 
+fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
+    fs::create_dir_all(&dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        } else {
+            fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        }
+    }
+    Ok(())
+}
+
 fn build_sasl(metadata: &Metadata) {
     let src_dir = metadata.out_dir.join("sasl2");
     if !src_dir.exists() {
@@ -51,9 +66,8 @@ fn build_sasl(metadata: &Metadata) {
         // globally shared, but sasl doesn't seem to support out-of-tree builds.
         // Work around the issue by copying sasl into OUT_DIR, and building
         // inside of *that* tree.
-        cmd!("cp", "-R", "sasl2", &src_dir)
-            .run()
-            .expect("failed making copy of sasl2 tree");
+        //
+        copy_dir_all("sasl2", &src_dir).expect("failed making copy of sasl2 tree");
     }
 
     let install_dir = metadata.out_dir.join("install");
